@@ -17,7 +17,6 @@
     textarea{min-height:200px;resize:vertical;font-family:monospace}
     button{margin-top:16px;padding:14px;border-radius:14px;border:none;font-size:16px;font-weight:700;color:#fff;cursor:pointer;background:linear-gradient(135deg,#6366f1,#8b5cf6)}
     button.secondary{background:#e5e7eb;color:#111827}
-    .info{font-size:13px;color:#6b7280}
     .spinner{text-align:center;font-size:56px;display:none;margin-top:20px;animation:pulse .6s infinite alternate}
     @keyframes pulse{from{transform:scale(1)}to{transform:scale(1.15)}}
     .results{margin-top:24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
@@ -33,13 +32,11 @@
 
   <div class="grid">
     <div>
-      <label>Импорт участников (CSV)</label>
+      <label>Импорт участников (CSV из Excel)</label>
       <input type="file" id="file" accept=".csv" />
 
-      <label style="margin-top:14px">Список подарков</label>
-      <textarea id="gifts" placeholder="iPhone 15
-AirPods Pro
-PlayStation 5"></textarea>
+      <label style="margin-top:14px">Список подарков (каждый с новой строки)</label>
+      <textarea id="gifts" placeholder="iPhone 15&#10;AirPods Pro&#10;PlayStation 5"></textarea>
 
       <button onclick="startDraw()">🎰 Запустить розыгрыш</button>
     </div>
@@ -63,10 +60,9 @@ PlayStation 5"></textarea>
 </div>
 
 <script>
-  // 🔒 Фиксированные победители по ПРОМОКОДУ (promo_code : 'Подарок')
+  // 🔒 Фиксированные победители по ПРОМОКОДУ
   const presetWinners = {
-    // 'ABC123': 'iPhone 15',
-    // 'WIN777': 'PlayStation 5'
+    // 'PROMO123': 'Спец Приз'
   };
 
   let users = [];
@@ -95,10 +91,20 @@ PlayStation 5"></textarea>
 
     reader.onload = () => {
       let text = reader.result;
+      
+      // Если файл в UTF-8, он может содержать BOM, убираем его
       if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+
       const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
-      if (lines.length < 2) { alert('CSV пуст или содержит только заголовок'); statusInput.value = 'Ошибка импорта'; return; }
+      if (lines.length < 2) { 
+        alert('CSV пуст или содержит только заголовок'); 
+        statusInput.value = 'Ошибка импорта'; 
+        return; 
+      }
+
+      // Определяем разделитель (запятая или точка с запятой)
       const delimiter = lines[0].includes(';') ? ';' : ',';
+
       users = lines.slice(1).map(line => {
         const v = line.split(delimiter);
         return {
@@ -109,19 +115,30 @@ PlayStation 5"></textarea>
           last_name: v[4]?.trim()
         };
       }).filter(u => u.promo_code && u.first_name);
+
       userCountInput.value = users.length;
       statusInput.value = 'Участники импортированы';
     };
 
-    reader.onerror = () => { alert('Ошибка чтения файла'); statusInput.value = 'Ошибка импорта'; };
+    reader.onerror = () => { 
+      alert('Ошибка чтения файла'); 
+      statusInput.value = 'Ошибка импорта'; 
+    };
 
-    reader.readAsText(file, 'UTF-8');
+    // Читаем в кодировке Windows-1251 (стандарт для кириллицы в Excel CSV)
+    reader.readAsText(file, 'windows-1251');
   });
 
   function startDraw(){
     const gifts = giftsInput.value.split('\n').map(g=>g.trim()).filter(Boolean);
-    if (!users.length || !gifts.length) { alert('Импортируйте участников и добавьте подарки'); return; }
-    if (gifts.length > users.length) { alert('Подарков больше, чем участников'); return; }
+    if (!users.length || !gifts.length) { 
+      alert('Импортируйте участников и добавьте подарки'); 
+      return; 
+    }
+    if (gifts.length > users.length) { 
+      alert('Подарков больше, чем участников'); 
+      return; 
+    }
 
     statusInput.value = 'Розыгрыш идёт…';
     document.getElementById('spinner').style.display='block';
@@ -129,27 +146,42 @@ PlayStation 5"></textarea>
     winners=[];
 
     const usedCodes = new Set();
-    Object.entries(presetWinners).forEach(([promoCode,gift])=>{
+    
+    // Сначала добавляем тех, кто должен победить по промокоду
+    Object.entries(presetWinners).forEach(([promoCode, gift]) => {
       const u = users.find(x => x.promo_code === promoCode);
-      if (u) { winners.push({...u, gift}); usedCodes.add(u.promo_code); }
+      if (u) { 
+        winners.push({...u, gift}); 
+        usedCodes.add(u.promo_code); 
+      }
     });
 
-    setTimeout(()=>{
-      gifts.forEach(gift=>{
-        if (winners.find(w=>w.gift===gift)) return;
+    setTimeout(() => {
+      // Распределяем остальные подарки
+      gifts.forEach(gift => {
+        if (winners.find(w => w.gift === gift)) return;
+        
         let candidate;
-        do { candidate = users[Math.floor(Math.random()*users.length)]; } while (usedCodes.has(candidate.promo_code));
-        usedCodes.add(candidate.promo_code);
-        winners.push({...candidate, gift});
+        let attempts = 0;
+        do { 
+          candidate = users[Math.floor(Math.random() * users.length)];
+          attempts++;
+        } while (usedCodes.has(candidate.promo_code) && attempts < 1000);
+        
+        if (!usedCodes.has(candidate.promo_code)) {
+          usedCodes.add(candidate.promo_code);
+          winners.push({...candidate, gift});
+        }
       });
+
       document.getElementById('spinner').style.display='none';
       showResults();
-      statusInput.value='Готово';
-    },800);
+      statusInput.value = 'Готово';
+    }, 800);
   }
 
   function showResults(){
-    document.getElementById('results').innerHTML = winners.map(w=>`
+    document.getElementById('results').innerHTML = winners.map(w => `
       <div class="card-win">
         <div class="gift">🎁 ${w.gift}</div>
         <h3>${w.first_name} ${w.last_name}</h3>
@@ -159,15 +191,26 @@ PlayStation 5"></textarea>
   }
 
   function exportWinners(){
-    if (!winners.length) { alert('Нет данных'); return; }
-    const rows = [['promo_id','promo_code','user_id','first_name','last_name','gift'],
-      ...winners.map(w=>[w.promo_id,w.promo_code,w.user_id,w.first_name,w.last_name,w.gift])];
-    const csv = rows.map(r=>r.join(',')).join('\n');
-    const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+    if (!winners.length) { alert('Нет данных для экспорта'); return; }
+    
+    const rows = [
+      ['promo_id', 'promo_code', 'user_id', 'first_name', 'last_name', 'gift'],
+      ...winners.map(w => [w.promo_id, w.promo_code, w.user_id, w.first_name, w.last_name, w.gift])
+    ];
+    
+    // Используем точку с запятой для лучшей совместимости с Excel
+    const csvContent = rows.map(r => r.join(';')).join('\n');
+    
+    // Добавляем BOM (\uFEFF) для корректного распознавания UTF-8 в Excel
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
+    a.href = url;
     a.download = 'winners.csv';
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
   }
 </script>
 </body>
