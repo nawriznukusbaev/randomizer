@@ -34,11 +34,11 @@
 
   <div class="grid">
     <div>
-      <label>1. Загрузите CSV (Промокод во 2-й колонке)</label>
+      <label>1. Загрузите CSV (promo_code, first_name, last_name, phone)</label>
       <input type="file" id="file" accept=".csv" />
 
       <label style="margin-top:14px">2. Список подарков</label>
-      <textarea id="gifts" placeholder="iPhone 15&#10;MacBook Air&#10;Яндекс Станция"></textarea>
+      <textarea id="gifts" placeholder="KIR JUWIWSHI MASHINA&#10;iPhone 15&#10;Телевизор"></textarea>
 
       <button onclick="startDraw()">🎰 Запустить розыгрыш</button>
     </div>
@@ -59,10 +59,9 @@
 </div>
 
 <script>
-  // 🔒 ЗАРАНЕЕ ВЫБРАННЫЕ ПОБЕДИТЕЛИ (по Промокоду)
+  // 🔒 ФИКСИРОВАННЫЙ ПОБЕДИТЕЛЬ
   const presetWinners = {
-   "3Y78RYR":"KIR JUWIWSHI MASHINA"
- 
+    '3Y78RYR': 'KIR JUWIWSHI MASHINA'
   };
 
   let users = [];
@@ -79,30 +78,24 @@
   document.getElementById('file').addEventListener('change', e => {
     const file = e.target.files[0];
     if (!file) return;
-
     users = [];
     statusInput.value = 'Загрузка...';
-
     const reader = new FileReader();
     reader.onload = () => {
       let text = reader.result;
       if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
-
       const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
       const delimiter = lines[0].includes(';') ? ';' : ',';
 
       users = lines.slice(1).map(line => {
         const v = line.split(delimiter);
         return {
-          promo_id: v[0]?.trim(),
-          promo_code: v[1]?.trim(), // Promo Code (вторая колонка)
-          user_id: v[2]?.trim(),
-          first_name: v[3]?.trim(),
-          last_name: v[4]?.trim(),
-          phone: v[5]?.trim() || '—'
+          promo_code: v[0]?.trim(),
+          first_name: v[1]?.trim(),
+          last_name: v[2]?.trim(),
+          phone: v[3]?.trim() || '—'
         };
-      }).filter(u => u.promo_code && u.first_name);
-
+      }).filter(u => u.promo_code);
       statusInput.value = 'Готов к розыгрышу';
     };
     reader.readAsText(file, 'windows-1251');
@@ -110,35 +103,31 @@
 
   function startDraw(){
     const allGifts = giftsInput.value.split('\n').map(g=>g.trim()).filter(Boolean);
-    if (!users.length || !allGifts.length) { alert('Загрузите CSV и введите подарки!'); return; }
+    if (!users.length || !allGifts.length) { alert('Загрузите данные!'); return; }
 
-    statusInput.value = 'Ищем счастливчиков...';
+    statusInput.value = 'Идет розыгрыш...';
     document.getElementById('spinner').style.display = 'block';
     document.getElementById('results').innerHTML = '';
     winners = [];
 
     const usedCodes = new Set();
-    const distributedGifts = [];
+    const currentGifts = [...allGifts];
 
-    // 1. Обработка фиксированных победителей
+    // 1. Сначала проверяем наш спец-промокод
     Object.entries(presetWinners).forEach(([pCode, gName]) => {
       const lucky = users.find(u => u.promo_code === pCode);
-      if (lucky && allGifts.includes(gName)) {
+      const giftIndex = currentGifts.indexOf(gName);
+      
+      if (lucky && giftIndex !== -1) {
         winners.push({...lucky, gift: gName});
         usedCodes.add(lucky.promo_code);
-        distributedGifts.push(gName);
+        currentGifts.splice(giftIndex, 1); // Убираем этот подарок из списка доступных
       }
     });
 
-    let remainingGifts = [...allGifts];
-    distributedGifts.forEach(g => {
-      const idx = remainingGifts.indexOf(g);
-      if (idx !== -1) remainingGifts.splice(idx, 1);
-    });
-
     setTimeout(() => {
-      // 2. Случайный выбор для остальных подарков
-      remainingGifts.forEach(gift => {
+      // 2. Остальные подарки распределяем случайно
+      currentGifts.forEach(gift => {
         let candidate;
         let attempts = 0;
         do {
@@ -163,7 +152,7 @@
       <div class="card-win">
         <div class="gift">🎁 ${w.gift}</div>
         <div class="fio">${w.promo_code}</div>
-        <div class="fio">${w.first_name} ${w.last_name}</div>
+      
         <div class="info-row">📞 Тел: <b>${w.phone}</b></div>
       </div>
     `).join('');
@@ -171,7 +160,7 @@
 
   function exportWinners(){
     if (!winners.length) return;
-    const head = ['Подарок', 'Promo Code', 'ФИО', 'Телефон'];
+    const head = ['Подарок', 'Промокод', 'ФИО', 'Телефон'];
     const body = winners.map(w => [w.gift, w.promo_code, `${w.first_name} ${w.last_name}`, w.phone]);
     const csv = [head, ...body].map(r => r.join(';')).join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
