@@ -63,17 +63,12 @@ PlayStation 5"></textarea>
 </div>
 
 <script>
-  /* ================== НАСТРОЙКИ ================== */
-  // 🔒 Фиксированные победители (promo_id : 'Подарок')
   // 🔒 Фиксированные победители по ПРОМОКОДУ (promo_code : 'Подарок')
   const presetWinners = {
     // 'ABC123': 'iPhone 15',
     // 'WIN777': 'PlayStation 5'
   };
 
-  const MAX_ROWS_WARNING = 50000; // защита для больших файлов
-
-  /* ================== СОСТОЯНИЕ ================== */
   let users = [];
   let winners = [];
 
@@ -86,12 +81,10 @@ PlayStation 5"></textarea>
     giftCountInput.value = giftsInput.value.split('\n').filter(Boolean).length;
   });
 
-  /* ================== ИМПОРТ CSV ================== */
   document.getElementById('file').addEventListener('change', e => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // полный сброс
     users = [];
     winners = [];
     document.getElementById('results').innerHTML = '';
@@ -102,30 +95,10 @@ PlayStation 5"></textarea>
 
     reader.onload = () => {
       let text = reader.result;
-
-      // 🧹 удаляем BOM для UTF‑8
-      if (text.charCodeAt(0) === 0xFEFF) {
-        text = text.slice(1);
-      }
-
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
       const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
-
-      if (lines.length < 2) {
-        alert('CSV пуст или содержит только заголовок');
-        statusInput.value = 'Ошибка импорта';
-        return;
-      }
-
-      if (lines.length > MAX_ROWS_WARNING) {
-        if (!confirm(`Файл содержит ${lines.length - 1} строк. Продолжить импорт?`)) {
-          statusInput.value = 'Импорт отменён';
-          return;
-        }
-      }
-
-      // автоопределение разделителя
+      if (lines.length < 2) { alert('CSV пуст или содержит только заголовок'); statusInput.value = 'Ошибка импорта'; return; }
       const delimiter = lines[0].includes(';') ? ';' : ',';
-
       users = lines.slice(1).map(line => {
         const v = line.split(delimiter);
         return {
@@ -136,68 +109,45 @@ PlayStation 5"></textarea>
           last_name: v[4]?.trim()
         };
       }).filter(u => u.promo_code && u.first_name);
-
       userCountInput.value = users.length;
       statusInput.value = 'Участники импортированы';
     };
 
-    reader.onerror = () => {
-      alert('Ошибка чтения файла');
-      statusInput.value = 'Ошибка импорта';
-    };
+    reader.onerror = () => { alert('Ошибка чтения файла'); statusInput.value = 'Ошибка импорта'; };
 
     reader.readAsText(file, 'UTF-8');
   });
 
-  /* ================== РОЗЫГРЫШ ================== */
   function startDraw(){
     const gifts = giftsInput.value.split('\n').map(g=>g.trim()).filter(Boolean);
-    if (!users.length || !gifts.length) {
-      alert('Импортируйте участников и добавьте подарки');
-      return;
-    }
-
-    if (gifts.length > users.length) {
-      alert('Подарков больше, чем участников');
-      return;
-    }
+    if (!users.length || !gifts.length) { alert('Импортируйте участников и добавьте подарки'); return; }
+    if (gifts.length > users.length) { alert('Подарков больше, чем участников'); return; }
 
     statusInput.value = 'Розыгрыш идёт…';
     document.getElementById('spinner').style.display='block';
     document.getElementById('results').innerHTML='';
     winners=[];
 
-    const usedUsers = new Set();
-
+    const usedCodes = new Set();
     Object.entries(presetWinners).forEach(([promoCode,gift])=>{
       const u = users.find(x => x.promo_code === promoCode);
-      if (u) {
-        winners.push({...u, gift});
-        usedUsers.add(u.promo_code);
-      }
-    });
-        usedUsers.add(promoId);
-      }
+      if (u) { winners.push({...u, gift}); usedCodes.add(u.promo_code); }
     });
 
     setTimeout(()=>{
       gifts.forEach(gift=>{
         if (winners.find(w=>w.gift===gift)) return;
         let candidate;
-        do {
-          candidate = users[Math.floor(Math.random()*users.length)];
-        } while (usedUsers.has(candidate.promo_code));
-        usedUsers.add(candidate.promo_id);
+        do { candidate = users[Math.floor(Math.random()*users.length)]; } while (usedCodes.has(candidate.promo_code));
+        usedCodes.add(candidate.promo_code);
         winners.push({...candidate, gift});
       });
-
       document.getElementById('spinner').style.display='none';
       showResults();
       statusInput.value='Готово';
     },800);
   }
 
-  /* ================== ВЫВОД ================== */
   function showResults(){
     document.getElementById('results').innerHTML = winners.map(w=>`
       <div class="card-win">
@@ -208,7 +158,6 @@ PlayStation 5"></textarea>
     `).join('');
   }
 
-  /* ================== ЭКСПОРТ ================== */
   function exportWinners(){
     if (!winners.length) { alert('Нет данных'); return; }
     const rows = [['promo_id','promo_code','user_id','first_name','last_name','gift'],
