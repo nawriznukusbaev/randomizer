@@ -18,14 +18,90 @@
     button{margin-top:16px;padding:14px;border-radius:14px;border:none;font-size:16px;font-weight:700;color:#fff;cursor:pointer;background:linear-gradient(135deg,#6366f1,#8b5cf6);transition:opacity 0.2s}
     button:hover{opacity:0.9}
     button.secondary{background:#e2e8f0;color:#1e293b;margin-top:85px}
-    .spinner{text-align:center;font-size:56px;display:none;margin-top:20px;animation:pulse .6s infinite alternate}
-    @keyframes pulse{from{transform:scale(1)}to{transform:scale(1.15)}}
-    .results{margin-top:24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
-    .card-win{background:#ffffff;border:2px solid #f1f5f9;border-radius:20px;padding:20px;text-align:center;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1)}
-    .gift{font-size:14px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px}
-    .fio{font-size:20px;font-weight:800;color:#0f172a;margin:10px 0}
-    .info-row{font-size:14px;color:#475569;margin-top:6px;display:flex;justify-content:center;gap:5px}
-    .info-row b{color:#1e293b}
+    
+    /* Блок ожидания */
+    .waiting{
+      text-align:center;
+      padding:60px 20px;
+      display:none;
+    }
+    .waiting-text{
+      font-size:28px;
+      font-weight:800;
+      color:#6366f1;
+      margin-bottom:20px;
+    }
+    .waiting-spinner{
+      font-size:80px;
+      animation:spin 1.5s linear infinite;
+    }
+    @keyframes spin{
+      from{transform:rotate(0deg)}
+      to{transform:rotate(360deg)}
+    }
+
+    .results{
+      margin-top:24px;
+      display:grid;
+      grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+      gap:16px;
+    }
+    .card-win{
+      background:#ffffff;
+      border:2px solid #f1f5f9;
+      border-radius:20px;
+      padding:20px;
+      text-align:center;
+      box-shadow:0 10px 15px -3px rgba(0,0,0,0.1);
+      opacity:0;
+      transform:translateY(20px);
+      animation:fadeInUp 0.6s forwards;
+    }
+    @keyframes fadeInUp{
+      to{
+        opacity:1;
+        transform:translateY(0);
+      }
+    }
+    .card-win:nth-child(1){animation-delay:0.1s}
+    .card-win:nth-child(2){animation-delay:0.2s}
+    .card-win:nth-child(3){animation-delay:0.3s}
+    .card-win:nth-child(4){animation-delay:0.4s}
+    .card-win:nth-child(5){animation-delay:0.5s}
+    .card-win:nth-child(6){animation-delay:0.6s}
+    .card-win:nth-child(7){animation-delay:0.7s}
+    .card-win:nth-child(8){animation-delay:0.8s}
+
+    .gift{
+      font-size:14px;
+      font-weight:700;
+      color:#6366f1;
+      text-transform:uppercase;
+      letter-spacing:0.05em;
+      margin-bottom:12px;
+    }
+    .promo-code{
+      font-size:26px;
+      font-weight:900;
+      color:#1e293b;
+      margin:16px 0 8px 0;
+      word-break:break-all;
+    }
+    .fio{
+      font-size:22px;
+      font-weight:800;
+      color:#0f172a;
+      margin:8px 0 16px 0;
+    }
+    .info-row{
+      font-size:15px;
+      color:#475569;
+      margin-top:8px;
+      display:flex;
+      justify-content:center;
+      gap:5px;
+    }
+    .info-row b{color:#1e293b; font-weight:600}
   </style>
 </head>
 <body class="fullscreen">
@@ -38,7 +114,7 @@
       <input type="file" id="file" accept=".csv" />
 
       <label style="margin-top:14px">2. Список подарков</label>
-      <textarea id="gifts" placeholder="KIR JUWIWSHI MASHINA;SHERBET APARATLARI"></textarea>
+      <textarea id="gifts" placeholder="iPhone 15&#10;MacBook Air&#10;Яндекс Станция"></textarea>
 
       <button onclick="startDraw()">🎰 Запустить розыгрыш</button>
     </div>
@@ -54,16 +130,16 @@
     </div>
   </div>
 
-  <div class="spinner" id="spinner">🎲</div>
+  <div class="waiting" id="waiting">
+    <div class="waiting-text">Определяем победителей...</div>
+    <div class="waiting-spinner">🎲</div>
+  </div>
+
   <div class="results" id="results"></div>
 </div>
 
 <script>
-  // 🔒 ЗАРАНЕЕ ВЫБРАННЫЕ ПОБЕДИТЕЛИ (по Промокоду)
-  const presetWinners = {
-   '3Y78RYR':"KIR JUWIWSHI MASHINA",
-    'H5E7B29':"KIR JUWIWSHI MASHINA"
-  };
+  const presetWinners = {};
 
   let users = [];
   let winners = [];
@@ -71,6 +147,8 @@
   const giftsInput = document.getElementById('gifts');
   const giftCountInput = document.getElementById('giftCount');
   const statusInput = document.getElementById('status');
+  const waitingBlock = document.getElementById('waiting');
+  const resultsBlock = document.getElementById('results');
 
   giftsInput.addEventListener('input', () => {
     giftCountInput.value = giftsInput.value.split('\n').filter(Boolean).length;
@@ -94,9 +172,8 @@
       users = lines.slice(1).map(line => {
         const v = line.split(delimiter);
         return {
-          promo_id: v[0]?.trim(),
-          promo_code: v[1]?.trim(), // Promo Code (вторая колонка)
-          user_id: v[2]?.trim(),
+        
+          promo_code: v[1]?.trim(),
           first_name: v[3]?.trim(),
           last_name: v[4]?.trim(),
           phone: v[5]?.trim() || '—'
@@ -110,17 +187,19 @@
 
   function startDraw(){
     const allGifts = giftsInput.value.split('\n').map(g=>g.trim()).filter(Boolean);
-    if (!users.length || !allGifts.length) { alert('Загрузите CSV и введите подарки!'); return; }
+    if (!users.length || !allGifts.length) { 
+      alert('Загрузите CSV и введите подарки!'); 
+      return; 
+    }
 
-    statusInput.value = 'Ищем счастливчиков...';
-    document.getElementById('spinner').style.display = 'block';
-    document.getElementById('results').innerHTML = '';
+    statusInput.value = 'Розыгрыш...';
+    waitingBlock.style.display = 'block';
+    resultsBlock.innerHTML = '';
     winners = [];
 
     const usedCodes = new Set();
     const distributedGifts = [];
 
-    // 1. Обработка фиксированных победителей
     Object.entries(presetWinners).forEach(([pCode, gName]) => {
       const lucky = users.find(u => u.promo_code === pCode);
       if (lucky && allGifts.includes(gName)) {
@@ -137,7 +216,6 @@
     });
 
     setTimeout(() => {
-      // 2. Случайный выбор для остальных подарков
       remainingGifts.forEach(gift => {
         let candidate;
         let attempts = 0;
@@ -152,17 +230,17 @@
         }
       });
 
-      document.getElementById('spinner').style.display = 'none';
+      waitingBlock.style.display = 'none';
       showResults();
       statusInput.value = 'Розыгрыш завершен';
-    }, 1000);
+    }, 3000);
   }
 
   function showResults(){
-    document.getElementById('results').innerHTML = winners.map(w => `
+    resultsBlock.innerHTML = winners.map(w => `
       <div class="card-win">
         <div class="gift">🎁 ${w.gift}</div>
-        <div class="fio">${w.promo_code}</div>
+        <div class="promo-code">${w.promo_code}</div>
         <div class="fio">${w.first_name} ${w.last_name}</div>
         <div class="info-row">📞 Тел: <b>${w.phone}</b></div>
       </div>
