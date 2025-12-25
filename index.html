@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🎁 Розыгрыш подарков</title>
+  <style>
+    body{margin:0;min-height:100vh;display:flex;justify-content:center;align-items:center;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;background:linear-gradient(135deg,#0f172a,#312e81);padding:16px}
+    body.fullscreen .app{max-width:100%;min-height:100vh;border-radius:0}
+    .app{background:#fff;width:100%;max-width:1100px;border-radius:24px;padding:24px;box-shadow:0 40px 80px rgba(0,0,0,.35)}
+    h1{text-align:center;margin-top:0}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+    @media(max-width:900px){.grid{grid-template-columns:1fr}}
+    label{font-weight:600;font-size:14px;display:block;margin-bottom:6px}
+    input,textarea,button{width:100%;box-sizing:border-box;font-size:15px}
+    input,textarea{padding:12px;border-radius:12px;border:1px solid #e5e7eb}
+    textarea{min-height:200px;resize:vertical;font-family:monospace}
+    button{margin-top:16px;padding:14px;border-radius:14px;border:none;font-size:16px;font-weight:700;color:#fff;cursor:pointer;background:linear-gradient(135deg,#6366f1,#8b5cf6)}
+    button.secondary{background:#e5e7eb;color:#111827}
+    .info{font-size:13px;color:#6b7280}
+    .spinner{text-align:center;font-size:56px;display:none;margin-top:20px;animation:pulse .6s infinite alternate}
+    @keyframes pulse{from{transform:scale(1)}to{transform:scale(1.15)}}
+    .results{margin-top:24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+    .card-win{background:#f8fafc;border-radius:18px;padding:18px;text-align:center;box-shadow:0 6px 18px rgba(0,0,0,.08)}
+    .card-win h3{margin:8px 0;font-size:18px;font-weight:700}
+    .gift{font-size:15px;font-weight:600;color:#4338ca}
+    .promo{font-size:14px;color:#111827;margin-top:4px}
+  </style>
+</head>
+<body class="fullscreen">
+<div class="app">
+  <h1>🎁 Розыгрыш подарков</h1>
+
+  <div class="grid">
+    <div>
+      <label>Импорт участников (CSV)</label>
+      <input type="file" id="file" accept=".csv" />
+
+      <label style="margin-top:14px">Список подарков</label>
+      <textarea id="gifts" placeholder="iPhone 15
+AirPods Pro
+PlayStation 5"></textarea>
+
+      <button onclick="startDraw()">🎰 Запустить розыгрыш</button>
+    </div>
+
+    <div>
+      <label>Статус</label>
+      <input id="status" disabled value="Ожидание импорта" />
+
+      <label style="margin-top:14px">Количество участников</label>
+      <input id="userCount" disabled />
+
+      <label style="margin-top:14px">Количество подарков</label>
+      <input id="giftCount" disabled />
+
+      <button class="secondary" onclick="exportWinners()">📤 Экспорт победителей (CSV)</button>
+    </div>
+  </div>
+
+  <div class="spinner" id="spinner">🎲</div>
+  <div class="results" id="results"></div>
+</div>
+
+<script>
+  /* ================== НАСТРОЙКИ ================== */
+  // 🔒 Фиксированные победители (promo_id : 'Подарок')
+  // 🔒 Фиксированные победители по ПРОМОКОДУ (promo_code : 'Подарок')
+  const presetWinners = {
+    // 'ABC123': 'iPhone 15',
+    // 'WIN777': 'PlayStation 5'
+  };
+
+  const MAX_ROWS_WARNING = 50000; // защита для больших файлов
+
+  /* ================== СОСТОЯНИЕ ================== */
+  let users = [];
+  let winners = [];
+
+  const giftsInput = document.getElementById('gifts');
+  const giftCountInput = document.getElementById('giftCount');
+  const userCountInput = document.getElementById('userCount');
+  const statusInput = document.getElementById('status');
+
+  giftsInput.addEventListener('input', () => {
+    giftCountInput.value = giftsInput.value.split('\n').filter(Boolean).length;
+  });
+
+  /* ================== ИМПОРТ CSV ================== */
+  document.getElementById('file').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // полный сброс
+    users = [];
+    winners = [];
+    document.getElementById('results').innerHTML = '';
+    userCountInput.value = '';
+    statusInput.value = 'Импорт участников…';
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      let text = reader.result;
+
+      // 🧹 удаляем BOM для UTF‑8
+      if (text.charCodeAt(0) === 0xFEFF) {
+        text = text.slice(1);
+      }
+
+      const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
+
+      if (lines.length < 2) {
+        alert('CSV пуст или содержит только заголовок');
+        statusInput.value = 'Ошибка импорта';
+        return;
+      }
+
+      if (lines.length > MAX_ROWS_WARNING) {
+        if (!confirm(`Файл содержит ${lines.length - 1} строк. Продолжить импорт?`)) {
+          statusInput.value = 'Импорт отменён';
+          return;
+        }
+      }
+
+      // автоопределение разделителя
+      const delimiter = lines[0].includes(';') ? ';' : ',';
+
+      users = lines.slice(1).map(line => {
+        const v = line.split(delimiter);
+        return {
+          promo_id: v[0]?.trim(),
+          promo_code: v[1]?.trim(),
+          user_id: v[2]?.trim(),
+          first_name: v[3]?.trim(),
+          last_name: v[4]?.trim()
+        };
+      }).filter(u => u.promo_code && u.first_name);
+
+      userCountInput.value = users.length;
+      statusInput.value = 'Участники импортированы';
+    };
+
+    reader.onerror = () => {
+      alert('Ошибка чтения файла');
+      statusInput.value = 'Ошибка импорта';
+    };
+
+    reader.readAsText(file, 'UTF-8');
+  });
+
+  /* ================== РОЗЫГРЫШ ================== */
+  function startDraw(){
+    const gifts = giftsInput.value.split('\n').map(g=>g.trim()).filter(Boolean);
+    if (!users.length || !gifts.length) {
+      alert('Импортируйте участников и добавьте подарки');
+      return;
+    }
+
+    if (gifts.length > users.length) {
+      alert('Подарков больше, чем участников');
+      return;
+    }
+
+    statusInput.value = 'Розыгрыш идёт…';
+    document.getElementById('spinner').style.display='block';
+    document.getElementById('results').innerHTML='';
+    winners=[];
+
+    const usedUsers = new Set();
+
+    Object.entries(presetWinners).forEach(([promoCode,gift])=>{
+      const u = users.find(x => x.promo_code === promoCode);
+      if (u) {
+        winners.push({...u, gift});
+        usedUsers.add(u.promo_code);
+      }
+    });
+        usedUsers.add(promoId);
+      }
+    });
+
+    setTimeout(()=>{
+      gifts.forEach(gift=>{
+        if (winners.find(w=>w.gift===gift)) return;
+        let candidate;
+        do {
+          candidate = users[Math.floor(Math.random()*users.length)];
+        } while (usedUsers.has(candidate.promo_code));
+        usedUsers.add(candidate.promo_id);
+        winners.push({...candidate, gift});
+      });
+
+      document.getElementById('spinner').style.display='none';
+      showResults();
+      statusInput.value='Готово';
+    },800);
+  }
+
+  /* ================== ВЫВОД ================== */
+  function showResults(){
+    document.getElementById('results').innerHTML = winners.map(w=>`
+      <div class="card-win">
+        <div class="gift">🎁 ${w.gift}</div>
+        <h3>${w.first_name} ${w.last_name}</h3>
+        <div class="promo">Промокод: <b>${w.promo_code}</b></div>
+      </div>
+    `).join('');
+  }
+
+  /* ================== ЭКСПОРТ ================== */
+  function exportWinners(){
+    if (!winners.length) { alert('Нет данных'); return; }
+    const rows = [['promo_id','promo_code','user_id','first_name','last_name','gift'],
+      ...winners.map(w=>[w.promo_id,w.promo_code,w.user_id,w.first_name,w.last_name,w.gift])];
+    const csv = rows.map(r=>r.join(',')).join('\n');
+    const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'winners.csv';
+    a.click();
+  }
+</script>
+</body>
+</html>
