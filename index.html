@@ -15,42 +15,40 @@
     input,textarea,button{width:100%;box-sizing:border-box;font-size:15px}
     input,textarea{padding:12px;border-radius:12px;border:1px solid #e5e7eb;background:#f8fafc}
     textarea{min-height:200px;resize:vertical;font-family:monospace}
-    button{margin-top:16px;padding:14px;border-radius:14px;border:none;font-size:16px;font-weight:700;color:#fff;cursor:pointer;background:linear-gradient(135deg,#6366f1,#8b5cf6);transition:opacity 0.2s}
-    button:hover{opacity:0.9}
+    button{margin-top:16px;padding:14px;border-radius:14px;border:none;font-size:16px;font-weight:700;color:#fff;cursor:pointer;background:linear-gradient(135deg,#6366f1,#8b5cf6)}
     button.secondary{background:#e2e8f0;color:#1e293b;margin-top:85px}
     .spinner{text-align:center;font-size:56px;display:none;margin-top:20px;animation:pulse .6s infinite alternate}
     @keyframes pulse{from{transform:scale(1)}to{transform:scale(1.15)}}
     .results{margin-top:24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
-    .card-win{background:#ffffff;border:2px solid #f1f5f9;border-radius:20px;padding:20px;text-align:center;box-shadow:0 10px 15px -3px rgba(0,0,0,0.1)}
-    .gift{font-size:14px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px}
-    .fio{font-size:20px;font-weight:800;color:#0f172a;margin:10px 0}
-    .info-row{font-size:14px;color:#475569;margin-top:6px;display:flex;justify-content:center;gap:5px}
-    .info-row b{color:#1e293b}
+    .card-win{background:#fff;border-radius:20px;padding:20px;text-align:center;box-shadow:0 10px 15px rgba(0,0,0,.1)}
+    .gift{font-size:14px;font-weight:700;color:#6366f1;margin-bottom:8px}
+    .fio{font-size:20px;font-weight:800}
   </style>
 </head>
+
 <body class="fullscreen">
 <div class="app">
   <h1>🎁 Розыгрыш подарков</h1>
 
   <div class="grid">
     <div>
-      <label>1. Загрузите CSV (promo_code, first_name, last_name, phone)</label>
+      <label>CSV (promo_code, first_name, last_name, phone)</label>
       <input type="file" id="file" accept=".csv" />
 
-      <label style="margin-top:14px">2. Список подарков</label>
-      <textarea id="gifts" placeholder="KIR JUWIWSHI MASHINA&#10;iPhone 15&#10;Телевизор"></textarea>
+      <label style="margin-top:14px">Список подарков</label>
+      <textarea id="gifts"></textarea>
 
       <button onclick="startDraw()">🎰 Запустить розыгрыш</button>
     </div>
 
     <div>
       <label>Статус</label>
-      <input id="status" disabled value="Ожидание данных" />
+      <input id="status" disabled value="Ожидание" />
 
       <label style="margin-top:14px">Количество подарков</label>
       <input id="giftCount" disabled value="0" />
 
-      <button class="secondary" onclick="exportWinners()">📤 Скачать список победителей</button>
+      <button class="secondary" onclick="exportWinners()">📤 Скачать победителей</button>
     </div>
   </div>
 
@@ -59,13 +57,12 @@
 </div>
 
 <script>
-  // 🔒 ФИКСИРОВАННЫЙ ПОБЕДИТЕЛЬ
-  const presetWinners = {
-    '3Y78RYR': 'MUZLATQISH'
-  };
+  const FIXED_PROMO = '3Y78RYR';
 
   let users = [];
   let winners = [];
+  let drawCount = 0;
+  let fixedWinnerUsed = false;
 
   const giftsInput = document.getElementById('gifts');
   const giftCountInput = document.getElementById('giftCount');
@@ -76,94 +73,73 @@
   });
 
   document.getElementById('file').addEventListener('change', e => {
-    const file = e.target.files[0];
-    if (!file) return;
-    users = [];
-    statusInput.value = 'Загрузка...';
     const reader = new FileReader();
     reader.onload = () => {
-      let text = reader.result;
-      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
-      const lines = text.split(/\r?\n/).filter(l => l.trim() !== '');
-      const delimiter = lines[0].includes(';') ? ';' : ',';
-
-      users = lines.slice(1).map(line => {
-        const v = line.split(delimiter);
-        return {
-          promo_code: v[0]?.trim(),
-          first_name: v[1]?.trim(),
-          last_name: v[2]?.trim(),
-          phone: v[3]?.trim() || '—'
-        };
-      }).filter(u => u.promo_code);
-      statusInput.value = 'Готов к розыгрышу';
+      const lines = reader.result.split(/\r?\n/).filter(Boolean);
+      users = lines.slice(1).map(l => {
+        const v = l.split(';');
+        return { promo_code: v[0], first_name: v[1], last_name: v[2], phone: v[3] || '—' };
+      });
+      statusInput.value = 'Готово';
     };
-    reader.readAsText(file, 'windows-1251');
+    reader.readAsText(e.target.files[0], 'windows-1251');
   });
 
-  function startDraw(){
-    const allGifts = giftsInput.value.split('\n').map(g=>g.trim()).filter(Boolean);
-    if (!users.length || !allGifts.length) { alert('Загрузите данные!'); return; }
-
-    statusInput.value = 'Идет розыгрыш...';
-    document.getElementById('spinner').style.display = 'block';
-    document.getElementById('results').innerHTML = '';
+  function startDraw() {
+    drawCount++;
     winners = [];
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('spinner').style.display = 'block';
+    statusInput.value = 'Розыгрыш...';
 
     const usedCodes = new Set();
-    const currentGifts = [...allGifts];
+    let gifts = giftsInput.value.split('\n').map(g => g.trim()).filter(Boolean);
 
-    // 1. Сначала проверяем наш спец-промокод
-    Object.entries(presetWinners).forEach(([pCode, gName]) => {
-      const lucky = users.find(u => u.promo_code === pCode);
-      const giftIndex = currentGifts.indexOf(gName);
-      
-      if (lucky && giftIndex !== -1) {
-        winners.push({...lucky, gift: gName});
+    // 🔒 Фиксированный победитель — 1 раз, на 5-м запуске
+    if (drawCount === 5 && !fixedWinnerUsed) {
+      const muzIndex = gifts.findIndex(g => g.toLowerCase().startsWith('muz'));
+      const lucky = users.find(u => u.promo_code === FIXED_PROMO);
+
+      if (muzIndex !== -1 && lucky) {
+        winners.push({ ...lucky, gift: gifts[muzIndex] });
         usedCodes.add(lucky.promo_code);
-        currentGifts.splice(giftIndex, 1); // Убираем этот подарок из списка доступных
+        gifts.splice(muzIndex, 1);
+        fixedWinnerUsed = true;
       }
-    });
+    }
 
     setTimeout(() => {
-      // 2. Остальные подарки распределяем случайно
-      currentGifts.forEach(gift => {
-        let candidate;
-        let attempts = 0;
+      gifts.forEach(gift => {
+        let user;
         do {
-          candidate = users[Math.floor(Math.random() * users.length)];
-          attempts++;
-        } while (usedCodes.has(candidate.promo_code) && attempts < 3000);
+          user = users[Math.floor(Math.random() * users.length)];
+        } while (usedCodes.has(user.promo_code));
 
-        if (!usedCodes.has(candidate.promo_code)) {
-          usedCodes.add(candidate.promo_code);
-          winners.push({...candidate, gift});
-        }
+        usedCodes.add(user.promo_code);
+        winners.push({ ...user, gift });
       });
 
       document.getElementById('spinner').style.display = 'none';
       showResults();
-      statusInput.value = 'Розыгрыш завершен';
-    }, 1000);
+      statusInput.value = 'Готово';
+    }, 800);
   }
 
-  function showResults(){
+  function showResults() {
     document.getElementById('results').innerHTML = winners.map(w => `
       <div class="card-win">
         <div class="gift">🎁 ${w.gift}</div>
         <div class="fio">${w.promo_code}</div>
-      
-        <div class="info-row">📞 Тел: <b>${w.phone}</b></div>
       </div>
     `).join('');
   }
 
-  function exportWinners(){
+  function exportWinners() {
     if (!winners.length) return;
-    const head = ['Подарок', 'Промокод', 'ФИО', 'Телефон'];
-    const body = winners.map(w => [w.gift, w.promo_code, `${w.first_name} ${w.last_name}`, w.phone]);
-    const csv = [head, ...body].map(r => r.join(';')).join('\n');
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const csv = winners.map(w =>
+      `${w.gift};${w.promo_code};${w.first_name} ${w.last_name};${w.phone}`
+    ).join('\n');
+    const blob = new Blob(['\uFEFF'+csv], {type:'text/csv'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'winners.csv';
