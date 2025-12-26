@@ -4,49 +4,47 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>🎁 Розыгрыш подарков</title>
+
   <style>
-    body{margin:0;min-height:100vh;display:flex;justify-content:center;align-items:center;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,sans-serif;background:linear-gradient(135deg,#0f172a,#312e81);padding:16px}
-    body.fullscreen .app{max-width:100%;min-height:100vh;border-radius:0}
-    .app{background:#fff;width:100%;max-width:1100px;border-radius:24px;padding:24px;box-shadow:0 40px 80px rgba(0,0,0,.35)}
-    h1{text-align:center;margin-top:0;color:#1e293b}
+    body{margin:0;min-height:100vh;display:flex;justify-content:center;align-items:center;font-family:system-ui;background:linear-gradient(135deg,#0f172a,#312e81);padding:16px}
+    .app{background:#fff;width:100%;max-width:1100px;border-radius:24px;padding:24px}
+    h1{text-align:center}
     .grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
     @media(max-width:900px){.grid{grid-template-columns:1fr}}
-    label{font-weight:600;font-size:14px;display:block;margin-bottom:6px;color:#475569}
-    input,textarea,button{width:100%;box-sizing:border-box;font-size:15px}
-    input,textarea{padding:12px;border-radius:12px;border:1px solid #e5e7eb;background:#f8fafc}
-    textarea{min-height:200px;resize:vertical;font-family:monospace}
-    button{margin-top:16px;padding:14px;border-radius:14px;border:none;font-size:16px;font-weight:700;color:#fff;cursor:pointer;background:linear-gradient(135deg,#6366f1,#8b5cf6)}
-    button.secondary{background:#e2e8f0;color:#1e293b;margin-top:85px}
-    .spinner{text-align:center;font-size:56px;display:none;margin-top:20px;animation:pulse .6s infinite alternate}
-    @keyframes pulse{from{transform:scale(1)}to{transform:scale(1.15)}}
-    .results{margin-top:24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
-    .card-win{background:#fff;border-radius:20px;padding:20px;text-align:center;box-shadow:0 10px 15px rgba(0,0,0,.1)}
-    .gift{font-size:14px;font-weight:700;color:#6366f1;margin-bottom:8px}
-    .fio{font-size:20px;font-weight:800}
+    label{font-weight:600;font-size:14px}
+    input,textarea,button{width:100%;margin-top:6px;padding:12px;border-radius:12px}
+    textarea{min-height:180px}
+    button{background:#6366f1;color:#fff;font-weight:700;border:none;cursor:pointer}
+    button.secondary{background:#e5e7eb;color:#000;margin-top:60px}
+    .spinner{font-size:56px;text-align:center;display:none;margin-top:20px}
+    .results{margin-top:24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+    .card{background:#f8fafc;padding:16px;border-radius:16px;text-align:center}
+    .gift{font-weight:700;color:#6366f1}
+    .code{font-size:20px;font-weight:800}
   </style>
 </head>
 
-<body class="fullscreen">
+<body>
 <div class="app">
   <h1>🎁 Розыгрыш подарков</h1>
 
   <div class="grid">
     <div>
-      <label>CSV (promo_code, first_name, last_name, phone)</label>
-      <input type="file" id="file" accept=".csv" />
+      <label>CSV (promo_code;first_name;last_name;phone)</label>
+      <input type="file" id="file" accept=".csv">
 
       <label style="margin-top:14px">Список подарков</label>
       <textarea id="gifts"></textarea>
 
-      <button onclick="startDraw()">🎰 Запустить розыгрыш</button>
+      <button onclick="startDraw()">🎰 Запустить</button>
     </div>
 
     <div>
       <label>Статус</label>
-      <input id="status" disabled value="Ожидание" />
+      <input id="status" disabled value="Ожидание">
 
       <label style="margin-top:14px">Количество подарков</label>
-      <input id="giftCount" disabled value="0" />
+      <input id="giftCount" disabled value="0">
 
       <button class="secondary" onclick="exportWinners()">📤 Скачать победителей</button>
     </div>
@@ -57,94 +55,139 @@
 </div>
 
 <script>
-  const FIXED_PROMO = '3Y78RYR';
+/* ================= НАСТРОЙКИ ================= */
 
-  let users = [];
-  let winners = [];
-  let drawCount = 0;
-  let fixedWinnerUsed = false;
+const FIXED_TV_ORDER = [
+  'E8QZ7OD', // 3
+  'L5DT156', // 4
+  '3Y78RYR', // 5
+  'VH30MWY'  // 6
+];
 
-  const giftsInput = document.getElementById('gifts');
-  const giftCountInput = document.getElementById('giftCount');
-  const statusInput = document.getElementById('status');
+const STORAGE_KEY = 'draw_state_v2';
 
-  giftsInput.addEventListener('input', () => {
-    giftCountInput.value = giftsInput.value.split('\n').filter(Boolean).length;
-  });
+/* ================= СОСТОЯНИЕ ================= */
 
-  document.getElementById('file').addEventListener('change', e => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const lines = reader.result.split(/\r?\n/).filter(Boolean);
-      users = lines.slice(1).map(l => {
-        const v = l.split(';');
-        return { promo_code: v[0], first_name: v[1], last_name: v[2], phone: v[3] || '—' };
-      });
-      statusInput.value = 'Готово';
-    };
-    reader.readAsText(e.target.files[0], 'windows-1251');
-  });
+let users = [];
+let winners = [];
 
-  function startDraw() {
-    drawCount++;
-    winners = [];
-    document.getElementById('results').innerHTML = '';
-    document.getElementById('spinner').style.display = 'block';
-    statusInput.value = 'Розыгрыш...';
+let state = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
+  drawCount: 0,
+  usedFixedPromos: []
+};
 
-    const usedCodes = new Set();
-    let gifts = giftsInput.value.split('\n').map(g => g.trim()).filter(Boolean);
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
 
-    // 🔒 Фиксированный победитель — 1 раз, на 5-м запуске
-    if (drawCount === 5 && !fixedWinnerUsed) {
-      const muzIndex = gifts.findIndex(g => g.toLowerCase().startsWith('muz'));
-      const lucky = users.find(u => u.promo_code === FIXED_PROMO);
+/* ================= ЗАГРУЗКА CSV ================= */
 
-      if (muzIndex !== -1 && lucky) {
-        winners.push({ ...lucky, gift: gifts[muzIndex] });
-        usedCodes.add(lucky.promo_code);
-        gifts.splice(muzIndex, 1);
-        fixedWinnerUsed = true;
+document.getElementById('file').addEventListener('change', e => {
+  const reader = new FileReader();
+  reader.onload = () => {
+    const lines = reader.result.split(/\r?\n/).filter(Boolean);
+    users = lines.slice(1).map(l => {
+      const v = l.split(';');
+      return {
+        promo_code: v[0]?.trim(),
+        first_name: v[1]?.trim(),
+        last_name: v[2]?.trim(),
+        phone: v[3]?.trim() || '—'
+      };
+    }).filter(u => u.promo_code);
+    status.value = 'CSV загружен';
+  };
+  reader.readAsText(e.target.files[0], 'windows-1251');
+});
+
+/* ================= СЧЁТ ПОДАРКОВ ================= */
+
+gifts.addEventListener('input', () => {
+  giftCount.value = gifts.value.split('\n').filter(Boolean).length;
+});
+
+/* ================= РОЗЫГРЫШ ================= */
+
+function startDraw() {
+  state.drawCount++;
+  saveState();
+
+  winners = [];
+  results.innerHTML = '';
+  spinner.style.display = 'block';
+  status.value = `Запуск №${state.drawCount}`;
+
+  let giftsList = gifts.value.split('\n').map(g => g.trim()).filter(Boolean);
+  const usedCodes = new Set();
+
+  /* ===== ФИКСИРОВАННЫЙ ПОРЯДОК 3–6 ===== */
+
+  const orderIndex = state.drawCount - 3;
+
+  if (orderIndex >= 0 && orderIndex < FIXED_TV_ORDER.length) {
+    const promo = FIXED_TV_ORDER[orderIndex];
+
+    if (!state.usedFixedPromos.includes(promo)) {
+      const tvIndex = giftsList.findIndex(g =>
+        g.toLowerCase().startsWith('televizor')
+      );
+
+      const user = users.find(u => u.promo_code === promo);
+
+      if (tvIndex !== -1 && user) {
+        winners.push({ ...user, gift: giftsList[tvIndex] });
+        usedCodes.add(promo);
+        giftsList.splice(tvIndex, 1);
+        state.usedFixedPromos.push(promo);
+        saveState();
       }
     }
-
-    setTimeout(() => {
-      gifts.forEach(gift => {
-        let user;
-        do {
-          user = users[Math.floor(Math.random() * users.length)];
-        } while (usedCodes.has(user.promo_code));
-
-        usedCodes.add(user.promo_code);
-        winners.push({ ...user, gift });
-      });
-
-      document.getElementById('spinner').style.display = 'none';
-      showResults();
-      statusInput.value = 'Готово';
-    }, 800);
   }
 
-  function showResults() {
-    document.getElementById('results').innerHTML = winners.map(w => `
-      <div class="card-win">
-        <div class="gift">🎁 ${w.gift}</div>
-        <div class="fio">${w.promo_code}</div>
-      </div>
-    `).join('');
-  }
+  /* ===== СЛУЧАЙНЫЕ ===== */
 
-  function exportWinners() {
-    if (!winners.length) return;
-    const csv = winners.map(w =>
-      `${w.gift};${w.promo_code};${w.first_name} ${w.last_name};${w.phone}`
-    ).join('\n');
-    const blob = new Blob(['\uFEFF'+csv], {type:'text/csv'});
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'winners.csv';
-    a.click();
-  }
+  setTimeout(() => {
+    giftsList.forEach(gift => {
+      let u;
+      do {
+        u = users[Math.floor(Math.random() * users.length)];
+      } while (usedCodes.has(u.promo_code));
+
+      usedCodes.add(u.promo_code);
+      winners.push({ ...u, gift });
+    });
+
+    spinner.style.display = 'none';
+    showResults();
+    status.value = 'Готово';
+  }, 700);
+}
+
+/* ================= ВЫВОД ================= */
+
+function showResults() {
+  results.innerHTML = winners.map(w => `
+    <div class="card">
+      <div class="gift">🎁 ${w.gift}</div>
+      <div class="code">${w.promo_code}</div>
+    </div>
+  `).join('');
+}
+
+/* ================= ЭКСПОРТ ================= */
+
+function exportWinners() {
+  if (!winners.length) return;
+  const csv = winners.map(w =>
+    `${w.gift};${w.promo_code};${w.first_name} ${w.last_name};${w.phone}`
+  ).join('\n');
+
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'winners.csv';
+  a.click();
+}
 </script>
 </body>
 </html>
