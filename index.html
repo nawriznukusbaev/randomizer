@@ -1,185 +1,186 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>🎁 Розыгрыш подарков</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎁 Розыгрыш подарков</title>
 
-  <style>
-    body{margin:0;min-height:100vh;display:flex;justify-content:center;align-items:center;font-family:system-ui;background:linear-gradient(135deg,#0f172a,#312e81);padding:16px}
-    .app{background:#fff;width:100%;max-width:1100px;border-radius:24px;padding:24px}
-    h1{text-align:center}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
-    @media(max-width:900px){.grid{grid-template-columns:1fr}}
-    label{font-weight:600;font-size:14px}
-    input,textarea,button{width:100%;margin-top:6px;padding:12px;border-radius:12px}
-    textarea{min-height:180px}
-    button{background:#6366f1;color:#fff;font-weight:700;border:none;cursor:pointer}
-    button.secondary{background:#e5e7eb;color:#000;margin-top:60px}
-    .spinner{font-size:56px;text-align:center;display:none;margin-top:20px}
-    .results{margin-top:24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
-    .card{background:#f8fafc;padding:16px;border-radius:16px;text-align:center}
-    .gift{font-weight:700;color:#6366f1}
-    .code{font-size:20px;font-weight:800}
-  </style>
+<style>
+body{
+  margin:0;min-height:100vh;display:flex;justify-content:center;align-items:center;
+  font-family:system-ui;background:linear-gradient(135deg,#0f172a,#312e81);padding:16px
+}
+.app{background:#fff;width:100%;max-width:1100px;border-radius:24px;padding:24px}
+h1{text-align:center}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+@media(max-width:900px){.grid{grid-template-columns:1fr}}
+label{font-weight:600;font-size:14px}
+input,textarea,button{width:100%;margin-top:6px;padding:12px;border-radius:12px}
+textarea{min-height:180px}
+button{background:#6366f1;color:#fff;font-weight:700;border:none;cursor:pointer}
+button.secondary{background:#e5e7eb;color:#000;margin-top:60px}
+
+.counter{
+  display:none;
+  text-align:center;
+  font-size:96px;
+  font-weight:900;
+  color:#6366f1;
+  margin-top:30px;
+  animation: pop 0.6s ease;
+}
+
+@keyframes pop{
+  0%{transform:scale(0.3);opacity:0}
+  60%{transform:scale(1.2);opacity:1}
+  100%{transform:scale(1);opacity:1}
+}
+
+.results{margin-top:24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.card{background:#f8fafc;padding:16px;border-radius:16px;text-align:center}
+.gift{font-weight:700;color:#6366f1}
+.code{font-size:20px;font-weight:800}
+</style>
 </head>
 
 <body>
 <div class="app">
-  <h1>🎁 Розыгрыш подарков</h1>
+<h1>🎁 Розыгрыш подарков</h1>
 
-  <div class="grid">
-    <div>
-      <label>CSV (promo_code;first_name;last_name;phone)</label>
-      <input type="file" id="file" accept=".csv">
-      <label style="margin-top:14px">Список подарков</label>
-      <textarea id="gifts"></textarea>
-      <button onclick="startDraw()">🎰 Запустить</button>
-    </div>
+<div class="grid">
+  <div>
+    <label>CSV (promo_code;first_name;last_name;phone)</label>
+    <input type="file" id="file" accept=".csv">
 
-    <div>
-      <label>Статус</label>
-      <input id="status" disabled value="Ожидание">
-      <label style="margin-top:14px">Количество подарков</label>
-      <input id="giftCount" disabled value="0">
-      <button class="secondary" onclick="exportWinners()">📤 Скачать победителей</button>
-    </div>
+    <label style="margin-top:14px">Список подарков</label>
+    <textarea id="gifts"></textarea>
+
+    <button onclick="startDraw()">🎰 Запустить</button>
   </div>
 
-  <div class="spinner" id="spinner">🎲</div>
-  <div class="results" id="results"></div>
+  <div>
+    <label>Статус</label>
+    <input id="status" disabled value="Ожидание">
+
+    <label style="margin-top:14px">Количество подарков</label>
+    <input id="giftCount" disabled value="0">
+
+    <button class="secondary" onclick="exportWinners()">📤 Скачать победителей</button>
+  </div>
+</div>
+
+<div class="counter" id="counter">1</div>
+<div class="results" id="results"></div>
 </div>
 
 <script>
-/* ================= ФИКСИРОВАННЫЕ ПО ЗАПУСКАМ ================= */
-
+/* ===== ФИКСИРОВАННЫЕ ПО ЗАПУСКАМ ===== */
 const FIXED_BY_DRAW = {
-  3: 'WTPHNSK',
-  4: 'CBMGUPC',
-  5: 'H5E7B29',
-  6: '0J282IW'
+  3:'WTPHNSK',
+  4:'CBMGUPC',
+  5:'H5E7B29',
+  6:'0J282IW',
+  7:'CAX4D9W',
+  8:'L5DT156',
 };
 
-const STORAGE_KEY = 'draw_state_strict';
+const STORAGE_KEY='draw_state_final';
 
-/* ================= СОСТОЯНИЕ ================= */
+let users=[], winners=[];
+let state=JSON.parse(localStorage.getItem(STORAGE_KEY))||{drawCount:0,fixed:{}};
+const save=()=>localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
 
-let users = [];
-let winners = [];
-
-let state = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
-  drawCount: 0,
-  fixedGiven: {} // {3:true,4:true...}
-};
-
-function saveState() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
-
-/* ================= CSV ================= */
-
-file.addEventListener('change', e => {
-  const reader = new FileReader();
-  reader.onload = () => {
-    const lines = reader.result.split(/\r?\n/).filter(Boolean);
-    users = lines.slice(1).map(l => {
-      const v = l.split(';');
-      return {
-        promo_code: v[0]?.trim(),
-        first_name: v[1]?.trim(),
-        last_name: v[2]?.trim(),
-        phone: v[3]?.trim() || '—'
+file.addEventListener('change',e=>{
+  const r=new FileReader();
+  r.onload=()=>{
+    const lines=r.result.split(/\r?\n/).filter(Boolean);
+    users=lines.slice(1).map(l=>{
+      const v=l.split(';');
+      return{
+        promo_code:v[0]?.trim(),
+        first_name:v[1]?.trim(),
+        last_name:v[2]?.trim(),
+        phone:v[3]?.trim()||'—'
       };
-    }).filter(u => u.promo_code);
-    status.value = 'CSV загружен';
+    }).filter(u=>u.promo_code);
+    status.value='CSV загружен';
   };
-  reader.readAsText(e.target.files[0], 'windows-1251');
+  r.readAsText(e.target.files[0],'windows-1251');
 });
 
-/* ================= ПОДАРКИ ================= */
-
-gifts.addEventListener('input', () => {
-  giftCount.value = gifts.value.split('\n').filter(Boolean).length;
+gifts.addEventListener('input',()=>{
+  giftCount.value=gifts.value.split('\n').filter(Boolean).length;
 });
 
-/* ================= РОЗЫГРЫШ ================= */
+function startDraw(){
+  state.drawCount++; save();
+  winners=[]; results.innerHTML='';
+  status.value=`Запуск №${state.drawCount}`;
+  let giftsList=gifts.value.split('\n').map(g=>g.trim()).filter(Boolean);
+  const used=new Set();
 
-function startDraw() {
-  state.drawCount++;
-  saveState();
-
-  winners = [];
-  results.innerHTML = '';
-  spinner.style.display = 'block';
-  status.value = `Запуск №${state.drawCount}`;
-
-  let giftsList = gifts.value.split('\n').map(g => g.trim()).filter(Boolean);
-  const usedCodes = new Set();
-
-  /* ===== СТРОГО ФИКСИРОВАННЫЙ ПО НОМЕРУ ЗАПУСКА ===== */
-
-  const promo = FIXED_BY_DRAW[state.drawCount];
-
-  if (promo && !state.fixedGiven[state.drawCount]) {
-    const muzIndex = giftsList.findIndex(g =>
-      g.toLowerCase().startsWith('muz')
-    );
-    const user = users.find(u => u.promo_code === promo);
-
-    if (muzIndex !== -1 && user) {
-      winners.push({ ...user, gift: giftsList[muzIndex] });
-      usedCodes.add(promo);
-      giftsList.splice(muzIndex, 1);
-      state.fixedGiven[state.drawCount] = true;
-      saveState();
+  animateCounter(()=>{
+    const promo=FIXED_BY_DRAW[state.drawCount];
+    if(promo && !state.fixed[state.drawCount]){
+      const muzIndex=giftsList.findIndex(g=>g.toLowerCase().startsWith('muz'));
+      const user=users.find(u=>u.promo_code===promo);
+      if(muzIndex!==-1 && user){
+        winners.push({...user,gift:giftsList[muzIndex]});
+        used.add(promo);
+        giftsList.splice(muzIndex,1);
+        state.fixed[state.drawCount]=true; save();
+      }
     }
-  }
 
-  /* ===== СЛУЧАЙНЫЕ ===== */
-
-  setTimeout(() => {
-    giftsList.forEach(gift => {
+    giftsList.forEach(g=>{
       let u;
-      do {
-        u = users[Math.floor(Math.random() * users.length)];
-      } while (usedCodes.has(u.promo_code));
-
-      usedCodes.add(u.promo_code);
-      winners.push({ ...u, gift });
+      do{u=users[Math.floor(Math.random()*users.length)]}
+      while(used.has(u.promo_code));
+      used.add(u.promo_code);
+      winners.push({...u,gift:g});
     });
 
-    spinner.style.display = 'none';
     showResults();
-    status.value = 'Готово';
-  }, 700);
+    status.value='Готово';
+  });
 }
 
-/* ================= ВЫВОД ================= */
+function animateCounter(done){
+  const c=document.getElementById('counter');
+  c.style.display='block';
+  let i=1;
+  const step=()=>{
+    c.textContent=i;
+    c.style.animation='none';
+    void c.offsetWidth;
+    c.style.animation='pop 0.6s ease';
+    if(i<3){i++; setTimeout(step,700)}
+    else setTimeout(()=>{c.style.display='none'; done();},700);
+  };
+  step();
+}
 
-function showResults() {
-  results.innerHTML = winners.map(w => `
+function showResults(){
+  results.innerHTML=winners.map(w=>`
     <div class="card">
       <div class="gift">🎁 ${w.gift}</div>
       <div class="code">${w.promo_code}</div>
-      <div style="margin-top:8px;font-size:14px;color:#475569">
-        📞 Телефон: <b>${w.phone}</b>
+      <div style="margin-top:8px;font-size:14px">
+        📞 <b>${w.phone}</b>
       </div>
     </div>
   `).join('');
 }
 
-/* ================= ЭКСПОРТ ================= */
-
-function exportWinners() {
-  if (!winners.length) return;
-  const csv = winners.map(w =>
+function exportWinners(){
+  if(!winners.length)return;
+  const csv=winners.map(w=>
     `${w.gift};${w.promo_code};${w.first_name} ${w.last_name};${w.phone}`
   ).join('\n');
-
-  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'winners.csv';
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='winners.csv';
   a.click();
 }
 </script>
