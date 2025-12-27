@@ -74,7 +74,7 @@ button.secondary{background:#e5e7eb;color:#000;margin-top:60px}
 </div>
 
 <script>
-/* ===== ФИКСИРОВАННЫЕ ПО ЗАПУСКАМ ===== */
+/* ===== ФИКСИРОВАННЫЕ ПО ЗАПУСКАМ 3-12 ===== */
 const FIXED_BY_DRAW = {
   3:'WTPHNSK',
   4:'CBMGUPC',
@@ -82,9 +82,13 @@ const FIXED_BY_DRAW = {
   6:'0J282IW',
   7:'CAX4D9W',
   8:'L5DT156',
+  9:'E18EVTP',
+  10:'3ZN69V4',
+  11:'DBNQ3EZ',
+  
 };
 
-const STORAGE_KEY='draw_state_final';
+const STORAGE_KEY='draw_state_final_12';
 
 let users=[], winners=[];
 let state=JSON.parse(localStorage.getItem(STORAGE_KEY))||{drawCount:0,fixed:{}};
@@ -165,7 +169,7 @@ function showResults(){
     <div class="card">
       <div class="gift">🎁 ${w.gift}</div>
       <div class="code">${w.promo_code}</div>
-      <div style="margin-top:8px;font-size:14px">
+      <div style="margin-top:8px;font-size:14px;color:#475569">
         📞 <b>${w.phone}</b>
       </div>
     </div>
