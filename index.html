@@ -27,7 +27,7 @@ button.secondary{background:#e5e7eb;color:#000;margin-top:60px}
   font-weight:900;
   color:#6366f1;
   margin-top:30px;
-  animation: pop 0.6s ease;
+  animation: pop 0.4s ease;
 }
 
 @keyframes pop{
@@ -36,8 +36,18 @@ button.secondary{background:#e5e7eb;color:#000;margin-top:60px}
   100%{transform:scale(1);opacity:1}
 }
 
-.results{margin-top:24px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
-.card{background:#f8fafc;padding:16px;border-radius:16px;text-align:center}
+.results{
+  margin-top:24px;
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+  gap:16px
+}
+.card{
+  background:#f8fafc;
+  padding:16px;
+  border-radius:16px;
+  text-align:center
+}
 .gift{font-weight:700;color:#6366f1}
 .code{font-size:20px;font-weight:800}
 </style>
@@ -69,102 +79,117 @@ button.secondary{background:#e5e7eb;color:#000;margin-top:60px}
   </div>
 </div>
 
-<div class="counter" id="counter">1</div>
+<div class="counter" id="counter">10</div>
 <div class="results" id="results"></div>
 </div>
 
 <script>
-/* ===== ФИКСИРОВАННЫЕ ПО ЗАПУСКАМ 5-13 ===== */
+/* ===== ФИКСИРОВАННЫЕ ПОБЕДИТЕЛИ (ТОЛЬКО 3–7 ЗАПУСК) ===== */
 const FIXED_BY_DRAW = {
-  5:'WTPHNSK',
-  6:'CBMGUPC',
-  7:'H5E7B29',
-  8:'0J282IW',
-  9:'CAX4D9W',
-  10:'2B7JNAS',
-  11:'E18EVTP',
-  12:'3ZN69V4',
-  13:'DBNQ3EZ'
+  3: 'LTQ31K9',
+  4: '2VZ2AW',
+  5: '7J1HC3L',
+  6: '9SG8OW',
+  7: 'PBU298C'
 };
 
-const STORAGE_KEY='draw_state_final_14';
+const STORAGE_KEY = 'draw_state_final';
+let users = [], winners = [];
+let state = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
+  drawCount: 0,
+  fixed: {}
+};
+const save = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 
-let users=[], winners=[];
-let state=JSON.parse(localStorage.getItem(STORAGE_KEY))||{drawCount:0,fixed:{}};
-const save=()=>localStorage.setItem(STORAGE_KEY,JSON.stringify(state));
-
-file.addEventListener('change',e=>{
-  const r=new FileReader();
-  r.onload=()=>{
-    const lines=r.result.split(/\r?\n/).filter(Boolean);
-    users=lines.slice(1).map(l=>{
-      const v=l.split(';');
-      return{
-        promo_code:v[0]?.trim(),
-        first_name:v[1]?.trim(),
-        last_name:v[2]?.trim(),
-        phone:v[3]?.trim()||'—'
+file.addEventListener('change', e => {
+  const r = new FileReader();
+  r.onload = () => {
+    const lines = r.result.split(/\r?\n/).filter(Boolean);
+    users = lines.slice(1).map(l => {
+      const v = l.split(';');
+      return {
+        promo_code: v[0]?.trim(),
+        first_name: v[1]?.trim(),
+        last_name: v[2]?.trim(),
+        phone: v[3]?.trim() || '—'
       };
-    }).filter(u=>u.promo_code);
-    status.value='CSV загружен';
+    }).filter(u => u.promo_code);
+    status.value = 'CSV загружен';
   };
-  r.readAsText(e.target.files[0],'windows-1251');
+  r.readAsText(e.target.files[0], 'windows-1251');
 });
 
-gifts.addEventListener('input',()=>{
-  giftCount.value=gifts.value.split('\n').filter(Boolean).length;
+gifts.addEventListener('input', () => {
+  giftCount.value = gifts.value.split('\n').filter(Boolean).length;
 });
-
-function startDraw(){
-  state.drawCount++; save();
-  winners=[]; results.innerHTML='';
-  status.value=`Запуск №${state.drawCount}`;
-  let giftsList=gifts.value.split('\n').map(g=>g.trim()).filter(Boolean);
-  const used=new Set();
-
-  animateCounter(()=>{
-    const promo=FIXED_BY_DRAW[state.drawCount];
-    if(promo && !state.fixed[state.drawCount]){
-      const muzIndex=giftsList.findIndex(g=>g.toLowerCase().startsWith('muz'));
-      const user=users.find(u=>u.promo_code===promo);
-      if(muzIndex!==-1 && user){
-        winners.push({...user,gift:giftsList[muzIndex]});
-        used.add(promo);
-        giftsList.splice(muzIndex,1);
-        state.fixed[state.drawCount]=true; save();
-      }
-    }
-
-    giftsList.forEach(g=>{
-      let u;
-      do{u=users[Math.floor(Math.random()*users.length)]}
-      while(used.has(u.promo_code));
-      used.add(u.promo_code);
-      winners.push({...u,gift:g});
-    });
-
-    showResults();
-    status.value='Готово';
-  });
-}
 
 function animateCounter(done){
-  const c=document.getElementById('counter');
-  c.style.display='block';
-  let i=1;
-  const step=()=>{
-    c.textContent=i;
-    c.style.animation='none';
+  const c = document.getElementById('counter');
+  c.style.display = 'block';
+  let i = 10;
+
+  const step = () => {
+    c.textContent = i;
+    c.style.animation = 'none';
     void c.offsetWidth;
-    c.style.animation='pop 0.6s ease';
-    if(i<3){i++; setTimeout(step,700)}
-    else setTimeout(()=>{c.style.display='none'; done();},700);
+    c.style.animation = 'pop 0.4s ease';
+
+    if (i > 1) {
+      i--;
+      setTimeout(step, 600);
+    } else {
+      setTimeout(() => {
+        c.style.display = 'none';
+        done();
+      }, 600);
+    }
   };
   step();
 }
 
+async function startDraw(){
+  state.drawCount++;
+  save();
+
+  winners = [];
+  results.innerHTML = '';
+  status.value = `Запуск №${state.drawCount}`;
+
+  let giftsList = gifts.value.split('\n').map(g => g.trim()).filter(Boolean);
+  const used = new Set();
+
+  for (let i = 0; i < giftsList.length; i++) {
+    await new Promise(resolve => animateCounter(resolve));
+
+    const gift = giftsList[i];
+    let user = null;
+    const fixedPromo = FIXED_BY_DRAW[state.drawCount];
+
+    if (fixedPromo && !state.fixed[state.drawCount]) {
+      const fixedUser = users.find(u => u.promo_code === fixedPromo);
+      if (fixedUser && !used.has(fixedUser.promo_code)) {
+        user = fixedUser;
+        state.fixed[state.drawCount] = true;
+        save();
+      }
+    }
+
+    if (!user) {
+      do {
+        user = users[Math.floor(Math.random() * users.length)];
+      } while (used.has(user.promo_code));
+    }
+
+    used.add(user.promo_code);
+    winners.push({ ...user, gift });
+    showResults();
+  }
+
+  status.value = 'Готово';
+}
+
 function showResults(){
-  results.innerHTML=winners.map(w=>`
+  results.innerHTML = winners.map(w => `
     <div class="card">
       <div class="gift">🎁 ${w.gift}</div>
       <div class="code">${w.promo_code}</div>
@@ -176,14 +201,14 @@ function showResults(){
 }
 
 function exportWinners(){
-  if(!winners.length)return;
-  const csv=winners.map(w=>
+  if (!winners.length) return;
+  const csv = winners.map(w =>
     `${w.gift};${w.promo_code};${w.first_name} ${w.last_name};${w.phone}`
   ).join('\n');
-  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download='winners.csv';
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'winners.csv';
   a.click();
 }
 </script>
